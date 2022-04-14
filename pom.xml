@@ -40,8 +40,8 @@
 
   <modules>
     <module>logback-core-db</module>
-    <!--<module>logback-classic-db</module>
-    <module>logback-access-db</module>-->
+    <module>logback-classic-db</module>
+    <!--<module>logback-access-db</module>-->
   </modules>
 
   <properties>
@@ -88,6 +88,14 @@
 
   <dependencyManagement>
     <dependencies>
+
+      <dependency>
+        <groupId>org.assertj</groupId>
+        <artifactId>assertj-core</artifactId>
+        <version>1.7.1</version>
+      </dependency>
+
+
       <!-- start of dependencies duplicated from logback-bom/pom.xml -->
       <dependency>
         <groupId>ch.qos.logback</groupId>
@@ -100,17 +108,19 @@
         <artifactId>logback-classic</artifactId>
         <version>${logback.version}</version>
       </dependency>        
+
       <dependency>
         <groupId>ch.qos.logback</groupId>
         <artifactId>logback-access</artifactId>
         <version>${logback.version}</version>
       </dependency>
+
       <dependency>
-        <groupId>ch.qos.logback</groupId>
-        <artifactId>logback-core</artifactId>
-        <version>${logback.version}</version>
-        <type>test-jar</type>
-      </dependency>
+        <groupId>ch.qos.logback.db</groupId>
+        <artifactId>logback-core-db</artifactId>
+        <version>${project.version}</version>
+      </dependency>        
+
       <!-- end of dependencies duplicated from logback-bom/pom.xml -->
     
       <dependency>
