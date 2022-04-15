@@ -38,7 +38,7 @@
     <dependency>
       <groupId>javax.servlet</groupId>
       <artifactId>javax.servlet-api</artifactId>
-      <version>3.1.0</version>
+      <version>${java.servlet-api.version}</version>
     </dependency>
     
 
@@ -66,9 +66,8 @@
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-surefire-plugin</artifactId>
         <configuration>
-          <forkCount>1C</forkCount>
-          <reuseForks>true</reuseForks>
-          <parallel>classes</parallel>
+          <forkCount>1</forkCount>
+          <reuseForks>true</reuseForks>          
           <threadCount>20</threadCount>
           <reportFormat>plain</reportFormat>
           <trimStackTrace>false</trimStackTrace>
