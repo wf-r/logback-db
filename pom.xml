@@ -34,7 +34,7 @@
   </licenses>
 
   <scm>
-    <url>https://github.com/ceki/logback-db</url>
+    <url>https://github.com/qos-ch/logback-db</url>
     <connection>scm:git@github.com:qos-ch/logback-db.git</connection>
   </scm>
 
