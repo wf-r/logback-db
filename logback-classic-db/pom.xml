@@ -11,7 +11,7 @@
     <version>1.2.11</version>
   </parent>
 
-  <artifactId>logback-clasisc-db</artifactId>
+  <artifactId>logback-classic-db</artifactId>
   <packaging>jar</packaging>
   <name>Logback DBAppender Classic Module</name>
   <description>logback-db-classic module</description>
