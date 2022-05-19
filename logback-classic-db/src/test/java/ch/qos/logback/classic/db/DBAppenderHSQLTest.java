@@ -17,11 +17,15 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
+import java.io.PrintWriter;
+import java.io.StringWriter;
+import java.lang.reflect.InvocationTargetException;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.Map;
 
+import ch.qos.logback.core.CoreConstants;
 import org.slf4j.MDC;
 import org.junit.*;
 
@@ -40,6 +44,8 @@ public class DBAppenderHSQLTest {
     Logger logger;
     DBAppender appender;
     DriverManagerConnectionSource connectionSource;
+    StringWriter sw = new StringWriter();
+    PrintWriter pw = new PrintWriter(sw);
 
     static DBAppenderHSQLTestFixture DB_APPENDER_HSQL_TEST_FIXTURE;
     int diff = RandomUtil.getPositiveInt();
@@ -128,26 +134,42 @@ public class DBAppenderHSQLTest {
 
     @Test
     public void testAppendThrowable() throws SQLException {
-        ILoggingEvent event = createLoggingEvent();
-        appender.append(event);
+        verifyException(testException());
+    }
 
-        ResultSet rs = null;
-        rs = stmt.executeQuery("SELECT * FROM LOGGING_EVENT_EXCEPTION where EVENT_ID = " + existingRowCount);
+    @Test
+    public void testAppendThrowableSuppressed() throws SQLException {
+        Exception ex = testException();
+        Exception fooException = new Exception("Foo");
+        Exception barException = new Exception("Bar");
+        ex.addSuppressed(fooException);
+        ex.addSuppressed(barException);
 
-        rs.next();
-        String expected = "java.lang.Exception: test Ex";
-        String firstLine = rs.getString(3);
-        assertTrue("[" + firstLine + "] does not match [" + expected + "]", firstLine.contains(expected));
+        verifyException(ex);
+    }
 
-        int i = 0;
-        while (rs.next()) {
-            expected = event.getThrowableProxy().getStackTraceElementProxyArray()[i].toString();
-            String st = rs.getString(3);
-            assertTrue("[" + st + "] does not match [" + expected + "]", st.contains(expected));
-            i++;
-        }
-        assertTrue(i != 0);
-        rs.close();
+    @Test
+    public void testAppendThrowableSuppressedWithCause() throws SQLException {
+        Exception e = testException();
+        Exception ex = new Exception("Wrapper", e);
+        Exception fooException = new Exception("Foo");
+        Exception barException = new Exception("Bar");
+        ex.addSuppressed(fooException);
+        e.addSuppressed(barException);
+
+        verifyException(ex);
+    }
+
+    @Test
+    public void testAppendThrowableSuppressedWithSuppressed() throws SQLException {
+        Exception e = testException();
+        Exception ex = new Exception("Wrapper", e);
+        Exception fooException = new Exception("Foo");
+        Exception barException = new Exception("Bar");
+        barException.addSuppressed(fooException);
+        e.addSuppressed(barException);
+
+        verifyException(ex);
     }
 
     @Test
@@ -193,7 +215,36 @@ public class DBAppenderHSQLTest {
         rs.close();
     }
 
+    private LoggingEvent createLoggingEvent(Throwable t) {
+        return new LoggingEvent(this.getClass().getName(), logger, Level.DEBUG, "test message", t, new Integer[] { diff });
+    }
+
     private ILoggingEvent createLoggingEvent() {
-        return new LoggingEvent(this.getClass().getName(), logger, Level.DEBUG, "test message", new Exception("test Ex"), new Integer[] { diff });
+        return createLoggingEvent(testException());
+    }
+
+    private Exception testException() {
+        return new Exception("test Ex");
+    }
+
+    private void verifyException(Exception ex) throws SQLException {
+        ILoggingEvent event = createLoggingEvent(ex);
+        appender.append(event);
+
+        ex.printStackTrace(pw);
+
+        Statement stmt = connectionSource.getConnection().createStatement();
+        ResultSet rs = null;
+        rs = stmt.executeQuery("SELECT * FROM LOGGING_EVENT_EXCEPTION where EVENT_ID = " + existingRowCount);
+        StringBuilder builder = new StringBuilder();
+        while (rs.next()) {
+            builder.append(
+                    rs.getString(3).replace("common frames omitted", "more")
+            ).append(CoreConstants.LINE_SEPARATOR);
+        }
+        assertEquals(sw.toString(), builder.toString());
+
+        rs.close();
+        stmt.close();
     }
 }

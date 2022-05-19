@@ -17,13 +17,16 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
+import java.io.PrintWriter;
+import java.io.StringWriter;
+import java.lang.reflect.InvocationTargetException;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.Date;
 import java.util.Map;
 
-import ch.qos.logback.classic.spi.CallerData;
+import ch.qos.logback.core.CoreConstants;
 import ch.qos.logback.core.status.StatusChecker;
 import org.slf4j.MDC;
 import org.junit.After;
@@ -41,13 +44,15 @@ import ch.qos.logback.core.util.StatusPrinter;
 
 public class DBAppenderH2Test {
 
-    LoggerContext loggerContext = new LoggerContext();;
+    LoggerContext loggerContext = new LoggerContext();
     Logger logger;
     DBAppender appender;
     DriverManagerConnectionSource connectionSource;
     DBAppenderH2TestFixture dbAppenderH2TestFixture;
     int diff = RandomUtil.getPositiveInt();
     StatusChecker checker = new StatusChecker(loggerContext);
+    StringWriter sw = new StringWriter();
+    PrintWriter pw = new PrintWriter(sw);
 
     @Before
     public void setUp() throws SQLException {
@@ -113,27 +118,42 @@ public class DBAppenderH2Test {
 
     @Test
     public void testAppendThrowable() throws SQLException {
-        ILoggingEvent event = createLoggingEvent();
-        appender.append(event);
-        Statement stmt = connectionSource.getConnection().createStatement();
-        ResultSet rs = null;
-        rs = stmt.executeQuery("SELECT * FROM LOGGING_EVENT_EXCEPTION WHERE EVENT_ID=1");
-        rs.next();
-        String expected = "java.lang.Exception: test Ex";
-        String firstLine = rs.getString(3);
-        assertTrue("[" + firstLine + "] does not match [" + expected + "]", firstLine.contains(expected));
+        verifyException(testException());
+    }
 
-        int i = 0;
-        while (rs.next()) {
-            expected = event.getThrowableProxy().getStackTraceElementProxyArray()[i].toString();
-            String st = rs.getString(3);
-            assertTrue("[" + st + "] does not match [" + expected + "]", st.contains(expected));
-            i++;
-        }
-        assertTrue(i != 0);
+    @Test
+    public void testAppendThrowableSuppressed() throws SQLException {
+        Exception ex = testException();
+        Exception fooException = new Exception("Foo");
+        Exception barException = new Exception("Bar");
+        ex.addSuppressed(fooException);
+        ex.addSuppressed(barException);
 
-        rs.close();
-        stmt.close();
+        verifyException(ex);
+    }
+
+    @Test
+    public void testAppendThrowableSuppressedWithCause() throws SQLException {
+        Exception e = testException();
+        Exception ex = new Exception("Wrapper", e);
+        Exception fooException = new Exception("Foo");
+        Exception barException = new Exception("Bar");
+        ex.addSuppressed(fooException);
+        e.addSuppressed(barException);
+
+        verifyException(ex);
+    }
+
+    @Test
+    public void testAppendThrowableSuppressedWithSuppressed() throws SQLException {
+        Exception e = testException();
+        Exception ex = new Exception("Wrapper", e);
+        Exception fooException = new Exception("Foo");
+        Exception barException = new Exception("Bar");
+        barException.addSuppressed(fooException);
+        e.addSuppressed(barException);
+
+        verifyException(ex);
     }
 
     @Test
@@ -208,12 +228,45 @@ public class DBAppenderH2Test {
         checker.assertIsErrorFree();
     }
 
+    private LoggingEvent createLoggingEvent(String msg, Throwable t, Object[] args) {
+        return new LoggingEvent(this.getClass().getName(), logger, Level.DEBUG, msg, t, args);
+    }
+
     private LoggingEvent createLoggingEvent(String msg, Object[] args) {
-        return new LoggingEvent(this.getClass().getName(), logger, Level.DEBUG, msg, new Exception("test Ex"), args);
+        return createLoggingEvent(msg, testException(), args);
     }
 
     private LoggingEvent createLoggingEvent() {
         return createLoggingEvent("test message", new Integer[] { diff });
+    }
+
+    private LoggingEvent createLoggingEvent(Throwable t) {
+        return createLoggingEvent("test message", t, new Integer[] { diff });
+    }
+
+    private Exception testException() {
+        return new Exception("test Ex");
+    }
+
+    private void verifyException(Exception ex) throws SQLException {
+        ILoggingEvent event = createLoggingEvent(ex);
+        appender.append(event);
+
+        ex.printStackTrace(pw);
+
+        Statement stmt = connectionSource.getConnection().createStatement();
+        ResultSet rs = null;
+        rs = stmt.executeQuery("SELECT * FROM LOGGING_EVENT_EXCEPTION WHERE EVENT_ID=1");
+        StringBuilder builder = new StringBuilder();
+        while (rs.next()) {
+            builder.append(
+                    rs.getString(3).replace("common frames omitted", "more")
+            ).append(CoreConstants.LINE_SEPARATOR);
+        }
+        rs.close();
+        stmt.close();
+
+        assertEquals(sw.toString(), builder.toString());
     }
 
 }
